@@ -50,73 +50,117 @@ function generateNodeTile(node) {
 }
 
 fetch('js/output.json')
-	.then(response => response.json())
-	.then(data => {
-		// Add nodes
-		data.nodes.forEach(node => {
-			nodes.add({
-				id: idCounter,
-				label: node.node_id,
-				node_type: node.node_type,
-				node_status: node.state,
-				node_mac: node.mac_address,
-				node_os: node.os,
-				node_ports: node.open_ports,
-				shape: "circle",
-				color: {
-					background: "#F0E68C", // 深卡其布色，柔和但饱和度更高
-					border: "#B8860B", // 深金色，边框更突出
-					highlight: {
-						background: "#FFD700", // 高亮时更明亮的金色
-						border: "#DAA520", // 高亮时稍深的金黄边框
-					},
-					hover: {
-						background: "#FFD700", // 鼠标悬停时背景颜色
-						border: "#8B7500", // 鼠标悬停时的边框颜色
-					},
-				},
-				shadow: {
-					enabled: true, // 开启阴影
-					color: "rgba(0, 0, 0, 0.5)", // 阴影颜色 (半透明黑色)
-					size: 10, // 阴影扩散范围
-					x: 5, // 阴影水平偏移
-					y: 5, // 阴影垂直偏移
-				},
-				opacity: 1,
-				title: generateNodeTile(node),
-			});
-			// 将 IP 映射到对应的 ID
-			ipToId[node.node_id] = idCounter++;
-		});
+    .then(response => response.json())
+    .then(data => {
+        nodes.clear();
+        edges.clear();
+        const ipToId = {}; // 存储节点ID到生成的节点ID的映射
+        let idCounter = 1; // 重置ID计数器
 
-		// Add edges
-		data.edges.forEach(edge => {
-			const fromId = ipToId[edge.from_node]; // 根据 IP 获取起点 ID
-			const toId = ipToId[edge.to_node]; // 根据 IP 获取终点 ID
-			if (fromId && toId) {
-				edges.add({
-					from: fromId,
-					to: toId,
-					length: EDGE_LENGTH_MAIN,
-					color: 'black' // Default to black if color is not provided
-				})
-			}
-			else if (!fromId) {
-				//fromId不存在，为此添加一个节点
-			}
-			else if (!toId) {
-				//toid不存在，为此添加一个节点
-			}
-		});
-		// 更新网络数据
-		network.setData({
-			nodes: nodes,
-			edges: edges
-		});
-	})
-	.catch(error => {
-		console.error('Error loading JSON:', error);
-	});
+        // 递归函数添加节点及其子节点
+        function addNodeWithChildren(node, parentId = null) {
+            const currentNodeId = idCounter;
+            nodes.add({
+                id: currentNodeId,
+                label: node.node_id,
+                node_type: node.type,
+                node_status: node.state,
+                node_fqdn: node.fqdn,
+                node_reverse_dns: node.reverse_dns,
+                node_mac: node.mac_address,
+                node_os: node.os,
+                node_ports: node.open_ports,
+                node_vendor: node.vendor,
+                node_children: node.children,
+                shape: "circle",
+                color: {
+                    background: "#F0E68C",
+                    border: "#B8860B",
+                    highlight: {
+                        background: "#FFD700",
+                        border: "#DAA520",
+                    },
+                    hover: {
+                        background: "#FFD700",
+                        border: "#8B7500",
+                    },
+                },
+                shadow: {
+                    enabled: true,
+                    color: "rgba(0, 0, 0, 0.5)",
+                    size: 10,
+                    x: 5,
+                    y: 5,
+                },
+                opacity: 1,
+                title: generateNodeTile(node),
+            });
+            ipToId[node.node_id] = currentNodeId;
+            idCounter++;
+
+            // 添加连接到父节点的边
+            if (parentId !== null) {
+                edges.add({
+                    from: parentId,
+                    to: currentNodeId,
+                    length: EDGE_LENGTH_MAIN,
+                    color: '#808080' // 子节点连接线使用灰色
+                });
+            }
+
+            // 递归处理子节点
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => {
+                    addNodeWithChildren(child, currentNodeId);
+                });
+            }
+        }
+
+        // 处理所有顶级节点
+        data.nodes.forEach(node => addNodeWithChildren(node));
+
+        // 处理边并自动创建缺失节点
+        data.edges.forEach(edge => {
+            const handleMissingNode = (nodeId) => {
+                if (!ipToId[nodeId]) {
+                    const newId = idCounter++;
+                    nodes.add({
+                        id: newId,
+                        label: nodeId,
+                        node_type: 'auto',
+                        shape: "circle",
+                        color: {
+                            background: "#E0FFFF", // 浅青色标识自动创建的节点
+                            border: "#4682B4",
+                            highlight: { background: "#AFEEEE", border: "#5F9EA0" },
+                            hover: { background: "#AFEEEE", border: "#5F9EA0" }
+                        },
+                        title: `Automatically created node for: ${nodeId}`
+                    });
+                    ipToId[nodeId] = newId;
+                    idCounter++;
+                    return newId;
+                }
+                return ipToId[nodeId];
+            };
+
+            const fromId = handleMissingNode(edge.from_node);
+            const toId = handleMissingNode(edge.to_node);
+            
+            edges.add({
+                from: fromId,
+                to: toId,
+                length: EDGE_LENGTH_MAIN,
+                color: 'black',
+                dashes: !ipToId[edge.from_node] || !ipToId[edge.to_node] // 虚线表示包含自动创建的节点
+            });
+			// console.log(edge.from_node+edge.to_node);
+			
+        });
+
+        network.setData({ nodes, edges });
+    })
+    .catch(error => console.error('Error loading JSON:', error));
 
 
 
@@ -192,7 +236,7 @@ function draw() {
 	});
 
 
-	// 新增函数：自动保存到本地JSON文件
+	// 自动保存到本地JSON文件
 	function autoSaveToJSON() {
 		const updatedData = {
 			nodes: nodes.get().map(node => ({
@@ -245,7 +289,7 @@ function draw() {
 			  <p>状态: ${node.node_status === 'up' ? '在线' : '离线'}</p>
 			  <p>操作系统: ${node.node_os || '未知'}</p>
 			  <p>MAC地址: ${node.node_mac || '未获取'}</p>
-			  <p>开放端口: ${Array.isArray(node.node_ports) ? node.node_ports.join(', ') : node.node_ports}</p>
+			  <p>开放端口: ${Array.isArray(node.node_ports) ? node.node_ports.map(p => p.port).join(', ') : (typeof node.node_ports === 'object' ? node.node_ports.port : node.node_ports)}</p>
 			`;
 				Swal.fire({
 					title: '节点信息',
@@ -256,48 +300,75 @@ function draw() {
 				menu.style.display = 'none';
 			};
 
-			// 修改节点
 			document.getElementById('modifyNode').onclick = () => {
 				const node = nodes.get(nodeId);
 				Swal.fire({
-					title: '修改节点信息',
-					html: `
-		<input id="swal-ip" class="swal2-input" placeholder="IP地址" value="${node.label}">
-		<select id="swal-status" class="swal2-select">
-		  <option value="up" ${node.node_status === 'up' ? 'selected' : ''}>在线</option>
-		  <option value="down" ${node.node_status === 'down' ? 'selected' : ''}>离线</option>
-		</select>
-		<input id="swal-os" class="swal2-input" placeholder="操作系统" value="${node.node_os || ''}">
-		<input id="swal-ports" class="swal2-input" placeholder="开放端口 (用逗号分隔)" value="${Array.isArray(node.node_ports) ? node.node_ports.join(',') : node.node_ports}">
-	  `,
-					focusConfirm: false,
-					preConfirm: () => {
-						return {
-							label: document.getElementById('swal-ip').value,
-							status: document.getElementById('swal-status').value,
-							os: document.getElementById('swal-os').value,
-							ports: document.getElementById('swal-ports').value.split(',').map(p => p.trim())
-						}
+				  title: '修改节点信息',
+				  html: `
+					<input id="swal-ip" class="swal2-input" placeholder="IP地址" value="${node.label}">
+					<select id="swal-status" class="swal2-select">
+					  <option value="up" ${node.node_status === 'up' ? 'selected' : ''}>在线</option>
+					  <option value="down" ${node.node_status === 'down' ? 'selected' : ''}>离线</option>
+					</select>
+					<input id="swal-os" class="swal2-input" placeholder="操作系统" value="${node.node_os || ''}">
+					<input id="swal-ports" class="swal2-input" 
+						   placeholder="开放端口 (格式: 端口/协议, 如 80/http)" 
+						   value="${Array.isArray(node.node_ports) ? 
+							 node.node_ports.map(p => `${p.port}${p.protocol ? '/'+p.protocol : ''}`).join(', ') : 
+							 ''}">
+				  `,
+				  focusConfirm: false,
+				  preConfirm: () => {
+					const originalPorts = node.node_ports || [];
+					const inputPorts = document.getElementById('swal-ports').value
+					  .split(',')
+					  .map(entry => {
+						const trimmed = entry.trim();
+						if (!trimmed) return null;
+						const [portStr, protocol = "tcp"] = trimmed.split('/');
+						const port = parseInt(portStr, 10);
+						return isNaN(port) ? null : { port, protocol: protocol.trim() };
+					  })
+					  .filter(Boolean);
+			  
+					if (inputPorts.length === 0) {
+					  Swal.showValidationMessage('端口不能为空');
+					  return false;
 					}
+			  
+					const processedPorts = inputPorts.map(({ port, protocol }) => {
+					  const existingPort = originalPorts.find(p => p.port === port);
+					  return existingPort ? 
+						{ ...existingPort, protocol } : 
+						{ port, protocol, service: "unknown", version: "" };
+					});
+			  
+					return {
+					  label: document.getElementById('swal-ip').value,
+					  status: document.getElementById('swal-status').value,
+					  os: document.getElementById('swal-os').value,
+					  ports: processedPorts
+					};
+				  }
 				}).then((result) => {
-					if (result.isConfirmed) {
-						const data = result.value;
-						nodes.update({
-							id: nodeId,
-							label: data.label,
-							node_status: data.status,
-							node_os: data.os,
-							node_ports: data.ports,
-							color: data.status === 'up' ?
-								{ background: "#F0E68C", border: "#B8860B" } :
-								{ background: "#D3D3D3", border: "#808080" }
-						});
-						network.redraw();
-						autoSaveToJSON(); // 新增自动保存
-					}
+				  if (result.isConfirmed) {
+					const data = result.value;
+					nodes.update({
+					  id: nodeId,
+					  label: data.label,
+					  node_status: data.status,
+					  node_os: data.os,
+					  node_ports: data.ports,
+					  color: data.status === 'up' ? 
+						{ background: "#F0E68C", border: "#B8860B" } : 
+						{ background: "#D3D3D3", border: "#808080" }
+					});
+					network.redraw();
+					autoSaveToJSON();
+				  }
 				});
 				menu.style.display = 'none';
-			};
+			  };
 
 
 
