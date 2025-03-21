@@ -63,15 +63,15 @@ fetch('js/output.json')
             nodes.add({
                 id: currentNodeId,
                 label: node.node_id,
-                node_type: node.type,
-                node_status: node.state,
-                node_fqdn: node.fqdn,
-                node_reverse_dns: node.reverse_dns,
-                node_mac: node.mac_address,
-                node_os: node.os,
-                node_ports: node.open_ports,
-                node_vendor: node.vendor,
-                node_children: node.children,
+                node_type: node.node_type,
+                state: node.state,
+                fqdn: node.fqdn,
+                reverse_dns: node.reverse_dns,
+                mac_address: node.mac_address,
+				vendor: node.vendor,
+                open_ports: node.open_ports,
+				os: node.os,
+                children: node.children,
                 shape: "circle",
                 color: {
                     background: "#F0E68C",
@@ -151,6 +151,9 @@ fetch('js/output.json')
                 from: fromId,
                 to: toId,
                 length: EDGE_LENGTH_MAIN,
+				edge_type:edge.edge_type,
+				protocol:edge.protocol,
+				layer:edge.layer,
                 color: 'black',
                 dashes: !ipToId[edge.from_node] || !ipToId[edge.to_node] // 虚线表示包含自动创建的节点
             });
@@ -242,14 +245,20 @@ function draw() {
 			nodes: nodes.get().map(node => ({
 				node_id: node.label,
 				node_type: node.node_type,
-				state: node.node_status,
-				mac_address: node.node_mac,
-				os: node.node_os,
-				open_ports: node.node_ports
+				state: node.state,
+				fqdn:node.fqdn,
+				reverse_dns:node.reverse_dns,
+				mac_address: node.mac_address,
+				vendor:node.vendor,
+				open_ports: node.open_ports,
+				os: node.os
 			})),
 			edges: edges.get().map(edge => ({
 				from_node: nodes.get(edge.from).label,
-				to_node: nodes.get(edge.to).label
+				to_node: nodes.get(edge.to).label,
+				edge_type:edge.edge_type,
+				protocol:edge.protocol,
+				layer:edge.layer
 			}))
 		};
 
@@ -286,10 +295,10 @@ function draw() {
 				const detailContent = `
 			  <h4>节点详情</h4>
 			  <p>IP地址: ${node.label}</p>
-			  <p>状态: ${node.node_status === 'up' ? '在线' : '离线'}</p>
-			  <p>操作系统: ${node.node_os || '未知'}</p>
-			  <p>MAC地址: ${node.node_mac || '未获取'}</p>
-			  <p>开放端口: ${Array.isArray(node.node_ports) ? node.node_ports.map(p => p.port).join(', ') : (typeof node.node_ports === 'object' ? node.node_ports.port : node.node_ports)}</p>
+			  <p>状态: ${node.node_state === 'up' ? '在线' : '离线'}</p>
+			  <p>操作系统: ${node.os || '未知'}</p>
+			  <p>MAC地址: ${node.mac_address || '未获取'}</p>
+			  <p>开放端口: ${Array.isArray(node.open_ports) ? node.open_ports.map(p => p.port).join(', ') : (typeof node.open_ports === 'object' ? node.open_ports.port : node.open_ports)}</p>
 			`;
 				Swal.fire({
 					title: '节点信息',
@@ -307,19 +316,19 @@ function draw() {
 				  html: `
 					<input id="swal-ip" class="swal2-input" placeholder="IP地址" value="${node.label}">
 					<select id="swal-status" class="swal2-select">
-					  <option value="up" ${node.node_status === 'up' ? 'selected' : ''}>在线</option>
-					  <option value="down" ${node.node_status === 'down' ? 'selected' : ''}>离线</option>
+					  <option value="up" ${node.state === 'up' ? 'selected' : ''}>在线</option>
+					  <option value="down" ${node.state === 'down' ? 'selected' : ''}>离线</option>
 					</select>
-					<input id="swal-os" class="swal2-input" placeholder="操作系统" value="${node.node_os || ''}">
+					<input id="swal-os" class="swal2-input" placeholder="操作系统" value="${node.os || ''}">
 					<input id="swal-ports" class="swal2-input" 
 						   placeholder="开放端口 (格式: 端口/协议, 如 80/http)" 
-						   value="${Array.isArray(node.node_ports) ? 
-							 node.node_ports.map(p => `${p.port}${p.protocol ? '/'+p.protocol : ''}`).join(', ') : 
+						   value="${Array.isArray(node.open_ports) ? 
+							 node.open_ports.map(p => `${p.port}${p.protocol ? '/'+p.protocol : ''}`).join(', ') : 
 							 ''}">
 				  `,
 				  focusConfirm: false,
 				  preConfirm: () => {
-					const originalPorts = node.node_ports || [];
+					const originalPorts = node.open_ports || [];
 					const inputPorts = document.getElementById('swal-ports').value
 					  .split(',')
 					  .map(entry => {
@@ -356,9 +365,9 @@ function draw() {
 					nodes.update({
 					  id: nodeId,
 					  label: data.label,
-					  node_status: data.status,
-					  node_os: data.os,
-					  node_ports: data.ports,
+					  state: data.status,
+					  os: data.os,
+					  open_ports: data.ports,
 					  color: data.status === 'up' ? 
 						{ background: "#F0E68C", border: "#B8860B" } : 
 						{ background: "#D3D3D3", border: "#808080" }
@@ -407,8 +416,6 @@ function draw() {
 		}
 	});
 
-	// 添加SweetAlert2库用于弹窗（在HTML头部添加）
-	// <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 	//选中节点
 	network.on("selectNode", function (params) { });
@@ -486,14 +493,14 @@ function draw() {
 		const nodeId = params.node; // 当前悬停的节点 ID
 		const node = nodes.get(nodeId); // 获取该节点的属性
 
-		// 如果节点是双击过的，保持其颜色
-		if (node.isClicked) {
-			// 不改变颜色
-			network.canvas.body.container.style.cursor = 'default';
-		} else {
-			// 恢复默认的鼠标悬停颜色
-			network.canvas.body.container.style.cursor = 'pointer';
-		}
+		// // 如果节点是双击过的，保持其颜色
+		// if (node.isClicked) {
+		// 	// 不改变颜色
+		// 	network.canvas.body.container.style.cursor = 'default';
+		// } else {
+		// 	// 恢复默认的鼠标悬停颜色
+		// 	network.canvas.body.container.style.cursor = 'pointer';
+		// }
 	})
 
 }
