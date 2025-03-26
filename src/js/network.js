@@ -7,8 +7,8 @@ var EDGE_LENGTH_SUB = 50;
 // 初始化 nodes 和 edges 使用 vis.DataSet
 const nodes = new vis.DataSet();
 const edges = new vis.DataSet();
-const ipToId = {}; // 用于存储 IP 到 ID 的映射
-let idCounter = 1; // 初始化 ID 计数器
+// const { ipcRenderer } = require('electron')
+
 
 
 
@@ -51,69 +51,92 @@ function generateNodeTile(node) {
 	`;
 }
 
-fetch('./js/output.json')
-    .then(response => response.json())
-    .then(data => {
-        nodes.clear();
-        edges.clear();
-        const ipToId = {}; // 存储节点ID到生成的节点ID的映射
-        let idCounter = 1; // 重置ID计数器
+window.api.readFile('/src/output.json')
+    // .then(response => response.json())
+	.then(content => {
+	// 	console.log('[DEBUG] 原始内容:', content);
 
-        // 递归函数添加节点及其子节点
+    // // 错误处理
+    // if (content?.error) {
+    //   console.error(`❌ 文件读取错误: ${content.code || 'UNKNOWN'}`, content.message);
+    //   return;
+    // }
+		const data = JSON.parse(content);
+		nodes.clear();
+		edges.clear();
+		const ipToId = {}; // 存储节点ID到生成的节点ID的映射
+		let idCounter = 1; // 重置ID计数器
+
+		// 递归函数添加节点及其子节点（关键修改部分）
         function addNodeWithChildren(node, parentId = null) {
+            // 生成当前节点ID并存储映射
             const currentNodeId = idCounter;
             nodes.add({
-                id: currentNodeId,
-                label: node.node_id,
-                node_type: node.node_type,
-                state: node.state,
-                fqdn: node.fqdn,
-                reverse_dns: node.reverse_dns,
-                mac_address: node.mac_address,
+				id: currentNodeId,
+				label: node.node_id,
+				node_type: node.node_type,
+				state: node.state,
+				fqdn: node.fqdn,
+				reverse_dns: node.reverse_dns,
+				mac_address: node.mac_address,
 				vendor: node.vendor,
-                open_ports: node.open_ports,
+				open_ports: node.open_ports,
 				os: node.os,
-                children: node.children,
-                shape: "circle",
-                color: {
-                    background: "#F0E68C",
-                    border: "#B8860B",
-                    highlight: {
-                        background: "#FFD700",
-                        border: "#DAA520",
-                    },
-                    hover: {
-                        background: "#FFD700",
-                        border: "#8B7500",
-                    },
-                },
-                shadow: {
-                    enabled: true,
-                    color: "rgba(0, 0, 0, 0.5)",
-                    size: 10,
-                    x: 5,
-                    y: 5,
-                },
-                opacity: 1,
-                title: generateNodeTile(node),
-            });
+				children: node.children,
+				shape: "circle",
+				color: {
+					background: "#F0E68C",
+					border: "#B8860B",
+					highlight: {
+						background: "#FFD700",
+						border: "#DAA520",
+					},
+					hover: {
+						background: "#FFD700",
+						border: "#8B7500",
+					},
+				},
+				shadow: {
+					enabled: true,
+					color: "rgba(0, 0, 0, 0.5)",
+					size: 10,
+					x: 5,
+					y: 5,
+				},
+				opacity: 1,
+				title: generateNodeTile(node),
+			});
             ipToId[node.node_id] = currentNodeId;
             idCounter++;
 
-            // 添加连接到父节点的边
+            // 连接到父节点
             if (parentId !== null) {
                 edges.add({
                     from: parentId,
                     to: currentNodeId,
                     length: EDGE_LENGTH_MAIN,
-                    color: '#808080' // 子节点连接线使用灰色
+                    color: '#808080'
                 });
             }
 
-            // 递归处理子节点
-            if (node.children && node.children.length > 0) {
-                node.children.forEach(child => {
-                    addNodeWithChildren(child, currentNodeId);
+            // 递归处理子节点（关键修改）
+            if (node.node_type === 'subnet' && node.children) {
+                node.children.forEach(childId => {
+                    // 在数据中查找对应的子节点对象
+                    const childNode = data.nodes.find(n => n.node_id === childId);
+                    
+                    if (childNode) {
+                        // 如果找到子节点定义，递归处理
+                        addNodeWithChildren(childNode, currentNodeId);
+                    } else {
+                        // 未找到时创建占位节点
+                        console.warn(`子节点 ${childId} 未定义，创建占位节点`);
+                        addNodeWithChildren({
+                            node_id: childId,
+                            node_type: 'unknown',
+                            state: 'down'
+                        }, currentNodeId);
+                    }
                 });
             }
         }
@@ -121,102 +144,114 @@ fetch('./js/output.json')
         // 处理所有顶级节点
         data.nodes.forEach(node => addNodeWithChildren(node));
 
-        // 处理边并自动创建缺失节点
+        // 处理边时自动补全节点（改进部分）
         data.edges.forEach(edge => {
-            const handleMissingNode = (nodeId) => {
+            const handleEdgeNode = (nodeId) => {
                 if (!ipToId[nodeId]) {
-                    const newId = idCounter++;
-                    nodes.add({
-                        id: newId,
-                        label: nodeId,
-                        node_type: 'auto',
-                        shape: "circle",
-                        color: {
-                            background: "#E0FFFF", // 浅青色标识自动创建的节点
-                            border: "#4682B4",
-                            highlight: { background: "#AFEEEE", border: "#5F9EA0" },
-                            hover: { background: "#AFEEEE", border: "#5F9EA0" }
-                        },
-                        title: `Automatically created node for: ${nodeId}`
-                    });
-                    ipToId[nodeId] = newId;
-                    idCounter++;
-                    return newId;
+                    // 尝试在原始数据中查找节点定义
+                    const originalNode = data.nodes.find(n => n.node_id === nodeId);
+                    
+                    if (originalNode) {
+                        // 如果找到未处理的节点，完整添加
+                        addNodeWithChildren(originalNode);
+                        return ipToId[nodeId];
+                    } else {
+                        // 创建自动生成的节点
+                        const newId = idCounter++;
+                        nodes.add({
+                            id: newId,
+                            label: nodeId,
+                            node_type: 'auto',
+                            shape: "circle",
+                            color: {
+                                background: "#E0FFFF",
+                                border: "#4682B4",
+                                highlight: { background: "#AFEEEE", border: "#5F9EA0" },
+                                hover: { background: "#AFEEEE", border: "#5F9EA0" }
+                            },
+                            title: `自动生成节点: ${nodeId}`
+                        });
+                        ipToId[nodeId] = newId;
+                        return newId;
+                    }
                 }
                 return ipToId[nodeId];
             };
 
-            const fromId = handleMissingNode(edge.from_node);
-            const toId = handleMissingNode(edge.to_node);
-            
-            edges.add({
-                from: fromId,
-                to: toId,
-                length: EDGE_LENGTH_MAIN,
-				edge_type:edge.edge_type,
-				protocol:edge.protocol,
-				layer:edge.layer,
-                color: 'black',
-                dashes: !ipToId[edge.from_node] || !ipToId[edge.to_node] // 虚线表示包含自动创建的节点
-            });
+            const fromId = handleEdgeNode(edge.from_node);
+            const toId = handleEdgeNode(edge.to_node);
+
+			edges.add({
+				from: fromId,
+				to: toId,
+				length: EDGE_LENGTH_MAIN,
+				edge_type: edge.edge_type,
+				protocol: edge.protocol,
+				layer: edge.layer,
+				color: 'black',
+				dashes: !ipToId[edge.from_node] || !ipToId[edge.to_node] // 虚线表示包含自动创建的节点
+			});
 			// console.log(edge.from_node+edge.to_node);
-			
-        });
 
-        network.setData({ nodes, edges });
-    })
-    .catch(error => console.error('Error loading JSON:', error));
+		});
+
+		// 将原来的 network.setData 调用替换为初始化网络
+        initNetwork(); // 新增的初始化调用
+	})
+	.catch(error => console.error('Error loading JSON:', error));
 
 
-
-
-var options = {
-	autoResize: true,
-	height: '100%',
-	width: '100%',
-	nodes: {
-		font: {
-			color: "#595959",
-			size: 5
-		}
-	},
-	edges: {
-		smooth: false, //是否显示方向箭头
-		color: "#c8c8c8" // 线条颜色
-	},
-	layout: {
-		improvedLayout: false
-	},
-	interaction: {
-		navigationButtons: false, // 如果为真，则在网络画布上绘制导航按钮。这些是HTML按钮，可以使用CSS完全自定义。
-		keyboard: {
-			enabled: false,
-		} // 启用键盘快捷键
-	},
-	physics: {
-		enabled: true,
-		barnesHut: {
-			gravitationalConstant: -4000,
-			centralGravity: 0.3,
-			springLength: 120,
-			springConstant: 0.04,
-			damping: 0.09,
-			avoidOverlap: 0
-		}
-	},
-	interaction: {
-		hover: true,
-	},
-};
-
-// Called when the Visualization API is loaded.
-function draw() {
-	var data = {
-		nodes: nodes,
-		edges: edges
+// 新增的初始化函数
+function initNetwork() {
+    var container = document.getElementById('mynetwork');
+    var data = {
+        nodes: nodes,
+        edges: edges
+    };
+	options = {
+		autoResize: true,
+		height: '100%',
+		width: '100%',
+		nodes: {
+			font: {
+				color: "#595959",
+				size: 5
+			}
+		},
+		edges: {
+			smooth: false, //是否显示方向箭头
+			color: "#c8c8c8" // 线条颜色
+		},
+		layout: {
+			improvedLayout: false
+		},
+		interaction: {
+			navigationButtons: false, // 如果为真，则在网络画布上绘制导航按钮。这些是HTML按钮，可以使用CSS完全自定义。
+			keyboard: {
+				enabled: false,
+			} // 启用键盘快捷键
+		},
+		physics: {
+			enabled: true,
+			barnesHut: {
+				gravitationalConstant: -4000,
+				centralGravity: 0.3,
+				springLength: 120,
+				springConstant: 0.04,
+				damping: 0.09,
+				avoidOverlap: 0
+			}
+		},
+		interaction: {
+			hover: true,
+		},
 	};
-	network = new vis.Network(container, data, options);
-
+    network = new vis.Network(container, data, options); // 真正初始化 network
+    
+    // 保持你原有的 network 事件监听器不变...
+    network.on("stabilized", function () {
+        // ...原有稳定化处理...
+    });
 	//动画稳定后的处理事件
 	var stabilizedTimer;
 	network.on("stabilized", function () {
@@ -248,35 +283,40 @@ function draw() {
 				node_id: node.label,
 				node_type: node.node_type,
 				state: node.state,
-				fqdn:node.fqdn,
-				reverse_dns:node.reverse_dns,
+				fqdn: node.fqdn,
+				reverse_dns: node.reverse_dns,
 				mac_address: node.mac_address,
-				vendor:node.vendor,
+				vendor: node.vendor,
 				open_ports: node.open_ports,
 				os: node.os
 			})),
 			edges: edges.get().map(edge => ({
 				from_node: nodes.get(edge.from).label,
 				to_node: nodes.get(edge.to).label,
-				edge_type:edge.edge_type,
-				protocol:edge.protocol,
-				layer:edge.layer
+				edge_type: edge.edge_type,
+				protocol: edge.protocol,
+				layer: edge.layer
 			}))
 		};
+		window.api.writeFile("/src/output.json",JSON.stringify(updatedData, null, 2));
+		// window.electronAPI.saveNetworkData(updatedData)
+		// 	.then(success => {
+		// 		if (success) Swal.fire('保存成功!', '', 'success');
+		// 	});
 
 		// 创建可下载的JSON文件
-		const dataStr = "data:text/json;charset=utf-8," +
-			encodeURIComponent(JSON.stringify(updatedData, null, 2));
+		// const dataStr = "data:text/json;charset=utf-8," +
+		// 	encodeURIComponent(JSON.stringify(updatedData, null, 2));
 
-		// 自动触发下载（会覆盖原文件）
-		const downloadLink = document.createElement('a');
-		downloadLink.href = dataStr;
-		downloadLink.download = 'output.json';
-		document.body.appendChild(downloadLink);
-		downloadLink.click();
-		document.body.removeChild(downloadLink);
+		// // 自动触发下载（会覆盖原文件）
+		// const downloadLink = document.createElement('a');
+		// downloadLink.href = dataStr;
+		// downloadLink.download = 'output.json';
+		// document.body.appendChild(downloadLink);
+		// downloadLink.click();
+		// document.body.removeChild(downloadLink);
 	}
-	
+
 
 	// 右键点击事件处理
 	network.on("oncontext", function (params) {
@@ -315,8 +355,8 @@ function draw() {
 			document.getElementById('modifyNode').onclick = () => {
 				const node = nodes.get(nodeId);
 				Swal.fire({
-				  title: '修改节点信息',
-				  html: `
+					title: '修改节点信息',
+					html: `
 					<input id="swal-ip" class="swal2-input" placeholder="IP地址" value="${node.label}">
 					<select id="swal-status" class="swal2-select">
 					  <option value="up" ${node.state === 'up' ? 'selected' : ''}>在线</option>
@@ -325,62 +365,62 @@ function draw() {
 					<input id="swal-os" class="swal2-input" placeholder="操作系统" value="${node.os || ''}">
 					<input id="swal-ports" class="swal2-input" 
 						   placeholder="开放端口 (格式: 端口/协议, 如 80/http)" 
-						   value="${Array.isArray(node.open_ports) ? 
-							 node.open_ports.map(p => `${p.port}${p.protocol ? '/'+p.protocol : ''}`).join(', ') : 
-							 ''}">
+						   value="${Array.isArray(node.open_ports) ?
+							node.open_ports.map(p => `${p.port}${p.protocol ? '/' + p.protocol : ''}`).join(', ') :
+							''}">
 				  `,
-				  focusConfirm: false,
-				  preConfirm: () => {
-					const originalPorts = node.open_ports || [];
-					const inputPorts = document.getElementById('swal-ports').value
-					  .split(',')
-					  .map(entry => {
-						const trimmed = entry.trim();
-						if (!trimmed) return null;
-						const [portStr, protocol = "tcp"] = trimmed.split('/');
-						const port = parseInt(portStr, 10);
-						return isNaN(port) ? null : { port, protocol: protocol.trim() };
-					  })
-					  .filter(Boolean);
-			  
-					if (inputPorts.length === 0) {
-					  Swal.showValidationMessage('端口不能为空');
-					  return false;
+					focusConfirm: false,
+					preConfirm: () => {
+						const originalPorts = node.open_ports || [];
+						const inputPorts = document.getElementById('swal-ports').value
+							.split(',')
+							.map(entry => {
+								const trimmed = entry.trim();
+								if (!trimmed) return null;
+								const [portStr, protocol = "tcp"] = trimmed.split('/');
+								const port = parseInt(portStr, 10);
+								return isNaN(port) ? null : { port, protocol: protocol.trim() };
+							})
+							.filter(Boolean);
+
+						if (inputPorts.length === 0) {
+							Swal.showValidationMessage('端口不能为空');
+							return false;
+						}
+
+						const processedPorts = inputPorts.map(({ port, protocol }) => {
+							const existingPort = originalPorts.find(p => p.port === port);
+							return existingPort ?
+								{ ...existingPort, protocol } :
+								{ port, protocol, service: "unknown", version: "" };
+						});
+
+						return {
+							label: document.getElementById('swal-ip').value,
+							status: document.getElementById('swal-status').value,
+							os: document.getElementById('swal-os').value,
+							ports: processedPorts
+						};
 					}
-			  
-					const processedPorts = inputPorts.map(({ port, protocol }) => {
-					  const existingPort = originalPorts.find(p => p.port === port);
-					  return existingPort ? 
-						{ ...existingPort, protocol } : 
-						{ port, protocol, service: "unknown", version: "" };
-					});
-			  
-					return {
-					  label: document.getElementById('swal-ip').value,
-					  status: document.getElementById('swal-status').value,
-					  os: document.getElementById('swal-os').value,
-					  ports: processedPorts
-					};
-				  }
 				}).then((result) => {
-				  if (result.isConfirmed) {
-					const data = result.value;
-					nodes.update({
-					  id: nodeId,
-					  label: data.label,
-					  state: data.status,
-					  os: data.os,
-					  open_ports: data.ports,
-					  color: data.status === 'up' ? 
-						{ background: "#F0E68C", border: "#B8860B" } : 
-						{ background: "#D3D3D3", border: "#808080" }
-					});
-					network.redraw();
-					autoSaveToJSON();
-				  }
+					if (result.isConfirmed) {
+						const data = result.value;
+						nodes.update({
+							id: nodeId,
+							label: data.label,
+							state: data.status,
+							os: data.os,
+							open_ports: data.ports,
+							color: data.status === 'up' ?
+								{ background: "#F0E68C", border: "#B8860B" } :
+								{ background: "#D3D3D3", border: "#808080" }
+						});
+						network.redraw();
+						autoSaveToJSON();
+					}
 				});
 				menu.style.display = 'none';
-			  };
+			};
 
 
 
@@ -505,12 +545,15 @@ function draw() {
 		// 	network.canvas.body.container.style.cursor = 'pointer';
 		// }
 	})
-
+    // ...其他事件监听...
 }
 
-$(function () {
-	draw();
-});
+
+
+
+
+function draw() {
+};
 
 /*
  *获取所有子节点

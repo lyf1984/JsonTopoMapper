@@ -1,12 +1,31 @@
 {
-  "name": "vis-network-master",
+  "name": "network-topology",
   "version": "1.0.0",
-  "description": "1、在根目录下输入`python -m http.server 8000`启动http服务",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac",
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "build": {
+    "appId": "com.example.network",
+    "productName": "网络拓扑图",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.0.3"
+  }
 }

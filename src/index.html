@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>vis.js拓扑图网状图/层级结构</title>
+	<!-- <link rel="stylesheet" href="css/bootstrap.css" /> -->
+	<style>
+		.box {
+			padding: 25px;
+		}
+
+		.vis-network div.vis-tooltip {
+			background-color: #fff;
+			border: 1px solid #ddeaff;
+			color: #595959;
+		}
+	</style>
+	<script>
+		if (typeof module === 'object') {
+		  window.module = module;
+		  module = undefined;
+		}
+	  </script>
+</head>
+
+<body>
+	<div class="box">
+		<!-- Nav tabs -->
+		<ul class="nav nav-tabs" role="tablist">
+			<li role="presentation" class="active"><a href="#netWork" aria-controls="netWork" role="tab"
+					data-toggle="tab">网状图</a></li>
+			<li role="presentation"><a href="#networkLevel" aria-controls="networkLevel" role="tab"
+					data-toggle="tab">层级结构</a></li>
+		</ul>
+		<!-- Tab panes -->
+		<div class="tab-content" style="height: calc(100vh - 110px);">
+			<div role="tabpanel" class="tab-pane active" id="netWork" style="height: 100%;">
+				<div id="mynetwork" style="width: 100%;height: 100%;margin:0 auto;">
+
+				</div>
+			</div>
+			<div role="tabpanel" class="tab-pane" id="networkLevel" style="height: 100%;">
+
+			</div>
+		</div>
+	</div>
+	<div id="nodeContextMenu" class="custom-context-menu">
+		<div class="menu-item" id="viewDetails">🔍 查看详情</div>
+		<div class="menu-item" id="modifyNode">✏️ 修改节点</div>
+		<div class="menu-item" id="deleteNode">🗑️ 删除节点</div>
+	</div>
+	<!-- 备用 CDN -->
+	<link rel="stylesheet" href="./css/bootstrap.css">
+	<script src="https://unpkg.com/sweetalert2@11"></script>
+	<script type="text/javascript" src="./js/jQuery-2.1.4.min.js"></script>
+	<script type="text/javascript" src="./js/bootstrap.js"></script>
+	<script type="text/javascript" src="./js/vis.min.js"></script>
+	<script type="text/javascript" src="./js/network.js"></script>
+	<!-- index.html -->
+<script type="module" src="./js/network.js"></script>
+</body>
+
+</html>
