@@ -9,6 +9,8 @@ const nodes = new vis.DataSet();
 const edges = new vis.DataSet();
 const ipToId = {}; // 用于存储 IP 到 ID 的映射
 let idCounter = 1; // 初始化 ID 计数器
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
 // 动态生成节点信息卡片的函数
 function generateNodeTile(node) {
@@ -239,41 +241,59 @@ function draw() {
 	});
 
 
-	// 自动保存到本地JSON文件
-	function autoSaveToJSON() {
-		const updatedData = {
-			nodes: nodes.get().map(node => ({
-				node_id: node.label,
-				node_type: node.node_type,
-				state: node.state,
-				fqdn:node.fqdn,
-				reverse_dns:node.reverse_dns,
-				mac_address: node.mac_address,
-				vendor:node.vendor,
-				open_ports: node.open_ports,
-				os: node.os
-			})),
-			edges: edges.get().map(edge => ({
-				from_node: nodes.get(edge.from).label,
-				to_node: nodes.get(edge.to).label,
-				edge_type:edge.edge_type,
-				protocol:edge.protocol,
-				layer:edge.layer
-			}))
-		};
+	const fs = require('fs');
+const path = require('path');
 
-		// 创建可下载的JSON文件
-		const dataStr = "data:text/json;charset=utf-8," +
-			encodeURIComponent(JSON.stringify(updatedData, null, 2));
+// 监听文件变化的函数
+function watchForChanges(filePath, callback) {
+  let timeout;
+  fs.watch(filePath, (eventType) => {
+    if (eventType === 'change') {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        callback();
+      }, 500); // 防抖处理
+    }
+  });
+}
 
-		// 自动触发下载（会覆盖原文件）
-		const downloadLink = document.createElement('a');
-		downloadLink.href = dataStr;
-		downloadLink.download = 'output.json';
-		document.body.appendChild(downloadLink);
-		downloadLink.click();
-		document.body.removeChild(downloadLink);
-	}
+// 自动更新函数
+function autoUpdateFile(filePath, data) {
+  const dirname = path.dirname(filePath);
+  const tempFile = path.join(dirname, `temp_${Date.now()}.json`);
+
+  try {
+    // 先写入临时文件
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
+    
+    // 替换原文件
+    fs.renameSync(tempFile, filePath);
+    console.log('文件更新成功:', new Date().toISOString());
+  } catch (err) {
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+    console.error('文件更新失败:', err);
+  }
+}
+
+// 使用示例
+const config = {
+  inputFile: path.join(__dirname, 'js/output.json'),
+  backupDir: path.join(__dirname, 'backups')
+};
+
+// 初始化监控
+watchForChanges(config.inputFile, () => {
+  console.log('检测到文件变化，正在重新加载...');
+  initNetwork(); // 重新初始化网络
+});
+
+// 初始化备份目录
+if (!fs.existsSync(config.backupDir)) {
+  fs.mkdirSync(config.backupDir);
+}
+	
 
 	// 右键点击事件处理
 	network.on("oncontext", function (params) {
