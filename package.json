@@ -1,0 +1,12 @@
+{
+  "name": "vis-network-master",
+  "version": "1.0.0",
+  "description": "1、在根目录下输入`python -m http.server 8000`启动http服务",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
