@@ -1,39 +1,43 @@
-var container = document.getElementById('mynetwork');
-var network = null;
-var options;
-var DIR = 'assets/refresh-cl/';
-var EDGE_LENGTH_MAIN = 100;
-var EDGE_LENGTH_SUB = 50;
-// 初始化 nodes 和 edges 使用 vis.DataSet
+/* 网络拓扑图主程序 */
+// 声明全局变量
+let idCounter = 1; // ID计数器
+let hoveredNodeId = null;
+var container = document.getElementById('mynetwork');  // 网络图容器
+var network = null;                                    // vis网络图实例
+var options;                                            // 网络图配置项
+var DIR = 'assets/refresh-cl/';                        // 资源目录
+var EDGE_LENGTH_MAIN = 100;                            // 主连接线长度
+var EDGE_LENGTH_SUB = 50;                              // 子连接线长度
+
+// 使用vis.DataSet初始化节点和边数据集
 const nodes = new vis.DataSet();
 const edges = new vis.DataSet();
-// const { ipcRenderer } = require('electron')
+const ipToId = {}; // 存储节点ID到生成的节点ID的映射
 
+//处理端口信息
+const parsePorts = (ports) => {
+	if (!ports) return '无'; // 字段不存在
+	if (typeof ports === 'number') return ports; // 单个端口号（数字）
+	if (typeof ports === 'string') return ports; // 字符串格式的端口（如 "80,443"）
 
+	// 如果是数组
+	if (Array.isArray(ports)) {
+		// 提取对象中的 port 字段（如果元素是对象）
+		const portList = ports.map(item => {
+			if (typeof item === 'object' && item.port !== undefined) {
+				return item.port; // 从对象中提取端口号
+			}
+			return item; // 直接是数字或字符串
+		});
+		return portList.join(', ') || '无';
+	}
 
+	return '无'; // 其他未知类型
+};
 
 // 动态生成节点信息卡片的函数
 function generateNodeTile(node) {
 	// 深度处理 open_ports 字段
-	const parsePorts = (ports) => {
-		if (!ports) return '无'; // 字段不存在
-		if (typeof ports === 'number') return ports; // 单个端口号（数字）
-		if (typeof ports === 'string') return ports; // 字符串格式的端口（如 "80,443"）
-
-		// 如果是数组
-		if (Array.isArray(ports)) {
-			// 提取对象中的 port 字段（如果元素是对象）
-			const portList = ports.map(item => {
-				if (typeof item === 'object' && item.port !== undefined) {
-					return item.port; // 从对象中提取端口号
-				}
-				return item; // 直接是数字或字符串
-			});
-			return portList.join(', ') || '无';
-		}
-
-		return '无'; // 其他未知类型
-	};
 	return `
 	  <div style="padding:15px;">
 		<h5 style="margin-bottom:10px;">IP(${node.node_id || '未知'})</h5>
@@ -49,138 +53,128 @@ function generateNodeTile(node) {
 		<h5>MAC：${node.mac_address || '未知'}</h5>
 	  </div>
 	`;
+};
+
+// 递归函数添加节点及其子节点
+function addNodeWithChildren(node, data,parentId = null) {
+	// 生成当前节点ID并存储映射
+	const currentNodeId = idCounter;
+	nodes.add({
+		id: currentNodeId,
+		label: node.node_id,
+		node_type: node.node_type,
+		state: node.state,
+		fqdn: node.fqdn,
+		reverse_dns: node.reverse_dns,
+		mac_address: node.mac_address,
+		vendor: node.vendor,
+		open_ports: node.open_ports,
+		os: node.os,
+		children: node.children,
+		shape: "circle",
+		color: {
+			background: "#F0E68C",
+			border: "#B8860B",
+			highlight: {
+				background: "#FFD700",
+				border: "#DAA520",
+			},
+			hover: {
+				background: "#FFD700",
+				border: "#8B7500",
+			},
+		},
+		shadow: {
+			enabled: true,
+			color: "rgba(0, 0, 0, 0.5)",
+			size: 10,
+			x: 5,
+			y: 5,
+		},
+		opacity: 1
+		// title: generateNodeTile(node),
+	});
+	ipToId[node.node_id] = currentNodeId;
+	idCounter++;
+
+	// 连接到父节点
+	if (parentId !== null) {
+		edges.add({
+			from: parentId,
+			to: currentNodeId,
+			length: EDGE_LENGTH_MAIN,
+			color: '#808080'
+		});
+	}
+
+	// 递归处理子节点
+	if (node.node_type === 'subnet' && node.children) {
+		node.children.forEach(childId => {
+			// 在数据中查找对应的子节点对象
+			const childNode = data.nodes.find(n => n.node_id === childId);
+			if (childNode) {
+				// 如果找到子节点定义，递归处理
+				addNodeWithChildren(childNode, data,currentNodeId);
+			} else {
+				// 未找到时创建占位节点
+				console.warn(`子节点 ${childId} 未定义，创建占位节点`);
+				addNodeWithChildren({
+					node_id: childId,
+					node_type: 'unknown',
+					state: 'down'
+				}, data,currentNodeId);
+			}
+		});
+	}
 }
 
-window.api.readFile('/src/output.json')
-    // .then(response => response.json())
-	.then(content => {
-	// 	console.log('[DEBUG] 原始内容:', content);
+//处理边的两端节点
+const handleEdgeNode = (nodeId,data) => {
+	if (!ipToId[nodeId]) {
+		// 尝试在原始数据中查找节点定义
+		const originalNode = data.nodes.find(n => n.node_id === nodeId);
+		if (originalNode) {
+			// 如果找到未处理的节点，完整添加
+			addNodeWithChildren(originalNode,data,nodeId);
+			return ipToId[nodeId];
+		} else {
+			// 创建自动生成的节点
+			const newId = idCounter++;
+			nodes.add({
+				id: newId,
+				label: nodeId,
+				node_type: 'auto',
+				shape: "circle",
+				color: {
+					background: "#E0FFFF",
+					border: "#4682B4",
+					highlight: { background: "#AFEEEE", border: "#5F9EA0" },
+					hover: { background: "#AFEEEE", border: "#5F9EA0" }
+				},
+				title: `自动生成节点: ${nodeId}`
+			});
+			ipToId[nodeId] = newId;
+			return newId;
+		}
+	}
+	return ipToId[nodeId];
+};
 
-    // // 错误处理
-    // if (content?.error) {
-    //   console.error(`❌ 文件读取错误: ${content.code || 'UNKNOWN'}`, content.message);
-    //   return;
-    // }
+/* 监听Electron文件打开事件 */
+window.api.onFilePath(async (filePath) => {
+	try {
+		const content = await window.api.readFile(filePath);
+		console.log("filepath:", filePath);
 		const data = JSON.parse(content);
 		nodes.clear();
 		edges.clear();
-		const ipToId = {}; // 存储节点ID到生成的节点ID的映射
 		let idCounter = 1; // 重置ID计数器
-
-		// 递归函数添加节点及其子节点（关键修改部分）
-        function addNodeWithChildren(node, parentId = null) {
-            // 生成当前节点ID并存储映射
-            const currentNodeId = idCounter;
-            nodes.add({
-				id: currentNodeId,
-				label: node.node_id,
-				node_type: node.node_type,
-				state: node.state,
-				fqdn: node.fqdn,
-				reverse_dns: node.reverse_dns,
-				mac_address: node.mac_address,
-				vendor: node.vendor,
-				open_ports: node.open_ports,
-				os: node.os,
-				children: node.children,
-				shape: "circle",
-				color: {
-					background: "#F0E68C",
-					border: "#B8860B",
-					highlight: {
-						background: "#FFD700",
-						border: "#DAA520",
-					},
-					hover: {
-						background: "#FFD700",
-						border: "#8B7500",
-					},
-				},
-				shadow: {
-					enabled: true,
-					color: "rgba(0, 0, 0, 0.5)",
-					size: 10,
-					x: 5,
-					y: 5,
-				},
-				opacity: 1,
-				title: generateNodeTile(node),
-			});
-            ipToId[node.node_id] = currentNodeId;
-            idCounter++;
-
-            // 连接到父节点
-            if (parentId !== null) {
-                edges.add({
-                    from: parentId,
-                    to: currentNodeId,
-                    length: EDGE_LENGTH_MAIN,
-                    color: '#808080'
-                });
-            }
-
-            // 递归处理子节点（关键修改）
-            if (node.node_type === 'subnet' && node.children) {
-                node.children.forEach(childId => {
-                    // 在数据中查找对应的子节点对象
-                    const childNode = data.nodes.find(n => n.node_id === childId);
-                    
-                    if (childNode) {
-                        // 如果找到子节点定义，递归处理
-                        addNodeWithChildren(childNode, currentNodeId);
-                    } else {
-                        // 未找到时创建占位节点
-                        console.warn(`子节点 ${childId} 未定义，创建占位节点`);
-                        addNodeWithChildren({
-                            node_id: childId,
-                            node_type: 'unknown',
-                            state: 'down'
-                        }, currentNodeId);
-                    }
-                });
-            }
-        }
-
-        // 处理所有顶级节点
-        data.nodes.forEach(node => addNodeWithChildren(node));
-
-        // 处理边时自动补全节点（改进部分）
-        data.edges.forEach(edge => {
-            const handleEdgeNode = (nodeId) => {
-                if (!ipToId[nodeId]) {
-                    // 尝试在原始数据中查找节点定义
-                    const originalNode = data.nodes.find(n => n.node_id === nodeId);
-                    
-                    if (originalNode) {
-                        // 如果找到未处理的节点，完整添加
-                        addNodeWithChildren(originalNode);
-                        return ipToId[nodeId];
-                    } else {
-                        // 创建自动生成的节点
-                        const newId = idCounter++;
-                        nodes.add({
-                            id: newId,
-                            label: nodeId,
-                            node_type: 'auto',
-                            shape: "circle",
-                            color: {
-                                background: "#E0FFFF",
-                                border: "#4682B4",
-                                highlight: { background: "#AFEEEE", border: "#5F9EA0" },
-                                hover: { background: "#AFEEEE", border: "#5F9EA0" }
-                            },
-                            title: `自动生成节点: ${nodeId}`
-                        });
-                        ipToId[nodeId] = newId;
-                        return newId;
-                    }
-                }
-                return ipToId[nodeId];
-            };
-
-            const fromId = handleEdgeNode(edge.from_node);
-            const toId = handleEdgeNode(edge.to_node);
-
+		// 处理所有顶级节点
+		data.nodes.forEach(node => addNodeWithChildren(node));
+		// 处理边时自动补全节点（改进部分）
+		data.edges.forEach(edge => {
+			const fromId = handleEdgeNode(edge.from_node,data);
+			const toId = handleEdgeNode(edge.to_node,data);
 			edges.add({
 				from: fromId,
 				to: toId,
@@ -191,23 +185,16 @@ window.api.readFile('/src/output.json')
 				color: 'black',
 				dashes: !ipToId[edge.from_node] || !ipToId[edge.to_node] // 虚线表示包含自动创建的节点
 			});
-			// console.log(edge.from_node+edge.to_node);
 
 		});
-
-		// 将原来的 network.setData 调用替换为初始化网络
-        initNetwork(); // 新增的初始化调用
-	})
-	.catch(error => console.error('Error loading JSON:', error));
-
+		initNetwork(filePath); // 初始化
+	} catch (error) {
+		console.error('文件读取失败:', error);
+	}
+});
 
 // 新增的初始化函数
-function initNetwork() {
-    var container = document.getElementById('mynetwork');
-    var data = {
-        nodes: nodes,
-        edges: edges
-    };
+function initNetwork(filePath) {
 	options = {
 		autoResize: true,
 		height: '100%',
@@ -233,25 +220,23 @@ function initNetwork() {
 		},
 		physics: {
 			enabled: true,
+			solver: "barnesHut",
 			barnesHut: {
 				gravitationalConstant: -4000,
 				centralGravity: 0.3,
 				springLength: 120,
 				springConstant: 0.04,
 				damping: 0.09,
-				avoidOverlap: 0
-			}
+				avoidOverlap: 0.2
+			},
 		},
 		interaction: {
 			hover: true,
 		},
 	};
-    network = new vis.Network(container, data, options); // 真正初始化 network
-    
-    // 保持你原有的 network 事件监听器不变...
-    network.on("stabilized", function () {
-        // ...原有稳定化处理...
-    });
+	network = new vis.Network(container, { nodes, edges }, options); // 真正初始化 network
+
+
 	//动画稳定后的处理事件
 	var stabilizedTimer;
 	network.on("stabilized", function () {
@@ -265,70 +250,15 @@ function initNetwork() {
 
 
 
-	network.on("oncontext", function (params) {
-
-		params.event.preventDefault();
-		$(".custom-menu").finish().toggle(100);
-		$(".custom-menu").css({
-			top: params.event.pageY + "px",
-			left: params.event.pageX + "px"
-		});
-	});
-
-
-	// 自动保存到本地JSON文件
-	function autoSaveToJSON() {
-		const updatedData = {
-			nodes: nodes.get().map(node => ({
-				node_id: node.label,
-				node_type: node.node_type,
-				state: node.state,
-				fqdn: node.fqdn,
-				reverse_dns: node.reverse_dns,
-				mac_address: node.mac_address,
-				vendor: node.vendor,
-				open_ports: node.open_ports,
-				os: node.os
-			})),
-			edges: edges.get().map(edge => ({
-				from_node: nodes.get(edge.from).label,
-				to_node: nodes.get(edge.to).label,
-				edge_type: edge.edge_type,
-				protocol: edge.protocol,
-				layer: edge.layer
-			}))
-		};
-		window.api.writeFile("/src/output.json",JSON.stringify(updatedData, null, 2));
-		// window.electronAPI.saveNetworkData(updatedData)
-		// 	.then(success => {
-		// 		if (success) Swal.fire('保存成功!', '', 'success');
-		// 	});
-
-		// 创建可下载的JSON文件
-		// const dataStr = "data:text/json;charset=utf-8," +
-		// 	encodeURIComponent(JSON.stringify(updatedData, null, 2));
-
-		// // 自动触发下载（会覆盖原文件）
-		// const downloadLink = document.createElement('a');
-		// downloadLink.href = dataStr;
-		// downloadLink.download = 'output.json';
-		// document.body.appendChild(downloadLink);
-		// downloadLink.click();
-		// document.body.removeChild(downloadLink);
-	}
-
-
 	// 右键点击事件处理
 	network.on("oncontext", function (params) {
 		params.event.preventDefault();
 		const menu = document.getElementById('nodeContextMenu');
 		menu.style.display = 'none';
-
-		if (params.nodes.length > 0) {
-			// 右键点击的是节点
-			const nodeId = params.nodes[0];
-			const node = nodes.get(nodeId);
-
+		// 右键点击的是节点
+		if (hoveredNodeId != null) {
+			// console.log("被右键了");
+			const node = nodes.get(hoveredNodeId);
 			// 更新菜单位置
 			menu.style.display = 'block';
 			menu.style.left = `${params.event.pageX}px`;
@@ -338,7 +268,7 @@ function initNetwork() {
 				const detailContent = `
 			  <h4>节点详情</h4>
 			  <p>IP地址: ${node.label}</p>
-			  <p>状态: ${node.node_state === 'up' ? '在线' : '离线'}</p>
+			  <p>状态: ${node.state === 'up' ? '✅ 在线' : '❌ 离线'}</p>
 			  <p>操作系统: ${node.os || '未知'}</p>
 			  <p>MAC地址: ${node.mac_address || '未获取'}</p>
 			  <p>开放端口: ${Array.isArray(node.open_ports) ? node.open_ports.map(p => p.port).join(', ') : (typeof node.open_ports === 'object' ? node.open_ports.port : node.open_ports)}</p>
@@ -353,7 +283,6 @@ function initNetwork() {
 			};
 
 			document.getElementById('modifyNode').onclick = () => {
-				const node = nodes.get(nodeId);
 				Swal.fire({
 					title: '修改节点信息',
 					html: `
@@ -406,7 +335,7 @@ function initNetwork() {
 					if (result.isConfirmed) {
 						const data = result.value;
 						nodes.update({
-							id: nodeId,
+							id: hoveredNodeId,
 							label: data.label,
 							state: data.status,
 							os: data.os,
@@ -416,13 +345,11 @@ function initNetwork() {
 								{ background: "#D3D3D3", border: "#808080" }
 						});
 						network.redraw();
-						autoSaveToJSON();
+						autoSaveToJSON(filePath);
 					}
 				});
 				menu.style.display = 'none';
 			};
-
-
 
 			// 删除节点
 			document.getElementById('deleteNode').onclick = () => {
@@ -437,14 +364,15 @@ function initNetwork() {
 				}).then((result) => {
 					if (result.isConfirmed) {
 						// 获取所有关联的边
-						const connectedEdges = network.getConnectedEdges(nodeId);
+						const connectedEdges = network.getConnectedEdges(hoveredNodeId);
 
 						// 删除节点和关联的边
-						nodes.remove(nodeId);
+						nodes.remove(hoveredNodeId);
 						edges.remove(connectedEdges);
 
 						// 刷新网络
 						network.redraw();
+						autoSaveToJSON(filePath);
 					}
 				});
 				menu.style.display = 'none';
@@ -459,169 +387,57 @@ function initNetwork() {
 		}
 	});
 
-
 	//选中节点
 	network.on("selectNode", function (params) { });
 
 	//单击节点
 	network.on("click", function (params) { });
 
-	// //双击节点
-	// network.on("doubleClick", function (params) {
-	// 	if (params.nodes.length !== 0) {
-	// 		const nodeId = params.nodes[0];
-	// 		// nodes.update({
-	// 		// 	id: nodeId,
-	// 		// 	size: 40, // 节点变大
-	// 		// 	color: {
-	// 		// 		background: "yellow", // 节点背景变成黄色
-	// 		// 		border: "orange",// 边框颜色变成橙色
-	// 		// 		hover:"yellow"
-	// 		// 	},
-	// 		// 	isClicked:true
-	// 		// });
-
-	// 		options.physics.enabled = true; // 启用物理引擎
-	// 		network.setOptions(options);
-
-	// 		// 获取所有子节点
-	// 		const childNodes = getAllChilds(network, nodeId, []);
-
-	// 		// 更新子节点可见性
-	// 		const updatedNodes = []; // 存储要更新的节点
-	// 		nodes.forEach(node => {
-	// 			if (childNodes.includes(node.id)) {
-	// 				updatedNodes.push({
-	// 					id: node.id,
-	// 					hidden: !node.hidden // 切换可见性
-	// 				});
-	// 			}
-	// 		});
-
-	// 		// 更新可见性
-	// 		if (updatedNodes.length > 0) {
-	// 			nodes.update(updatedNodes);
-	// 		}
-
-	// 		// 停止物理引擎
-	// 		setTimeout(() => {
-	// 			options.physics.enabled = false;
-	// 			network.setOptions(options);
-	// 		}, 300); // 300ms 后停止物理引擎
-	// 	}
-	// });
-	// 绑定右键事件
-
-
-
-
 	//拖动节点
-	network.on("dragging", function (params) {//拖动进行中事件
-		if (params.nodes.length != 0) {
-			nodeMoveFun(params);
-		}
+	network.on("dragging", function (params) {
 	});
 
 	//拖动结束后
 	network.on("dragEnd", function (params) {
-		if (params.nodes.length != 0) {
-			var arr = nodeMoveFun(params);
-			exportNetworkPosition(network, arr);
-		}
 	});
 
 	// 缩放
 	network.on("zoom", function (params) { });
-	network.on("hoverNode", function (params) {
-		const nodeId = params.node; // 当前悬停的节点 ID
-		const node = nodes.get(nodeId); // 获取该节点的属性
 
-		// // 如果节点是双击过的，保持其颜色
-		// if (node.isClicked) {
-		// 	// 不改变颜色
-		// 	network.canvas.body.container.style.cursor = 'default';
-		// } else {
-		// 	// 恢复默认的鼠标悬停颜色
-		// 	network.canvas.body.container.style.cursor = 'pointer';
-		// }
-	})
-    // ...其他事件监听...
-}
-
-
-
-
-
-function draw() {
-};
-
-/*
- *获取所有子节点
- * network ：图形对象
- * _thisNode ：单击的节点（父节点）
- * _Allnodes ：用来装子节点ID的数组
- * */
-function getAllChilds(network, nodeId, allNodes) {
-	const connectedNodes = network.getConnectedNodes(nodeId, "to"); // 获取所有子节点
-	connectedNodes.forEach(childId => {
-		if (!allNodes.includes(childId)) {
-			allNodes.push(childId); // 避免重复节点
-			getAllChilds(network, childId, allNodes); // 递归查找子节点
-		}
+	// 监听鼠标悬停节点事件
+	network.on("hoverNode", (params) => {
+		hoveredNodeId = params.node;
 	});
-	return allNodes;
-};
 
-// 节点移动
-function nodeMoveFun(params) {
-	const clickedNodeId = params.nodes[0];
-	const childNodes = getAllChilds(network, clickedNodeId, []);
+	// 监听鼠标离开节点事件
+	network.on("blurNode", () => {
+		hoveredNodeId = null;
+	});
 
-	if (childNodes.length > 0) {
-		const positions = network.getPositions(); // 获取所有节点的位置
-		const startPosition = positions[clickedNodeId]; // 当前节点的位置
-		const moveX = startPosition.x - positions[clickedNodeId].x;
-		const moveY = startPosition.y - positions[clickedNodeId].y;
-
-		const updatedPositions = {};
-		childNodes.forEach(childId => {
-			const childPos = positions[childId];
-			if (childPos) {
-				updatedPositions[childId] = {
-					x: childPos.x + moveX,
-					y: childPos.y + moveY
-				};
-				network.moveNode(childId, updatedPositions[childId].x, updatedPositions[childId].y);
-			}
-		});
-	}
-};
-
-
-
-/*
- *节点位置设置
- * network ：图形对象
- * arr ：本次移动的节点位置信息
- * */
-function exportNetworkPosition(network, arr) {
-	if (arr) { // 折叠过后  getPositions() 获取的位置信息里不包含隐藏的节点位置信息，这时候调用上次存储的全部节点位置，并修改这次移动的节点位置，最后保存
-		var localtionPosition = JSON.parse(localStorage.getItem("position"));
-		for (let index in arr) {
-			localtionPosition[index] = {
-				x: arr[index].x,
-				y: arr[index].y
-			}
-		}
-		setLocal(localtionPosition);
-
-	} else {
-		var position = network.getPositions();
-		setLocal(position);
-	}
-};
-//处理本地存储，这里仅仅只能作为高级浏览器使用，ie9以下不能处理
-function setLocal(position) {
-	localStorage.removeItem("position");
-	localStorage.setItem("position", JSON.stringify(position));
 }
+
+// 自动保存到JSON文件
+function autoSaveToJSON(filePath) {
+	const updatedData = {
+		nodes: nodes.get().map(node => ({
+			node_id: node.label,
+			node_type: node.node_type,
+			state: node.state,
+			fqdn: node.fqdn,
+			reverse_dns: node.reverse_dns,
+			mac_address: node.mac_address,
+			vendor: node.vendor,
+			open_ports: node.open_ports,
+			os: node.os
+		})),
+		edges: edges.get().map(edge => ({
+			from_node: nodes.get(edge.from).label,
+			to_node: nodes.get(edge.to).label,
+			edge_type: edge.edge_type,
+			protocol: edge.protocol,
+			layer: edge.layer
+		}))
+	};
+	window.api.writeFile(filePath, JSON.stringify(updatedData, null, 2));
+}
+
