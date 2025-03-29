@@ -1,10 +1,23 @@
 
 #### 使用
 
-~~1、在根目录下输入`python -m http.server 8000`启动http服务~~
+1、安装依赖
 
-~~2、在浏览器中输入`localhost:8000/index.html`~~
+```
+npm install -g cnpm --registry=https://registry.npmmirror.com
 
-1、输入`cnpm install electron --save-dev`安装依赖
+cnpm install electron --save-dev
 
-2、输入`cnpm start`启动项目
+cnpm install --save-dev @babel/plugin-transform-runtime @babel/runtime-corejs3
+
+cnpm install @babel/plugin-transform-modules-commonjs --save-dev
+
+cnpm install --save-dev @babel/core @babel/preset-env babel-loader webpack webpack-cli webpack-node-externals electron-reload
+```
+
+2、启动项目
+
+```
+cnpm start
+```
+
