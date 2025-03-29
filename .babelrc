@@ -1,0 +1,15 @@
+{
+    "presets": [
+      ["@babel/preset-env", {
+        "targets": {
+          "electron": "35.1.1" // 根据你的 Electron 版本调整
+        },
+        "modules": "auto",     // 自动转换模块类型
+        "useBuiltIns": "usage",
+        "corejs": 3.32
+      }]
+    ],
+    "plugins": [
+      "@babel/plugin-transform-runtime"
+    ]
+  }

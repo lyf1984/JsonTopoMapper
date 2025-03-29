@@ -1,8 +1,10 @@
 // 主进程：Electron 应用的核心进程，负责窗口管理和系统交互
-const { Menu, app, BrowserWindow, ipcMain, dialog } = require ('electron');
-const {join} = require("path")
-const { promises:fs } = require('fs');  // 使用 Promise 版本的 fs 模块
-
+import { Menu, app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { join } from 'path'
+import { promises as fs } from 'fs'  // 使用 Promise 版本的 fs 模块
+import { fileURLToPath } from 'url';
+import path from 'path';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let mainWindow  // 主窗口引用
 /*----------------------- 窗口管理 -----------------------*/
 /**
@@ -22,7 +24,7 @@ function createWindow() {
   })
 
   // 加载本地 HTML 文件
-  const startUrl = join(__dirname, 'src/index.html')
+  const startUrl = join(__dirname, 'dist/index.html')
   mainWindow.loadFile(startUrl)
 
   // 开发模式下自动打开开发者工具
