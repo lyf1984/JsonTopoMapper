@@ -3,8 +3,7 @@
 
 <head>
 	<meta charset="utf-8">
-	<title>vis.js拓扑图网状图/层级结构</title>
-	<!-- <link rel="stylesheet" href="../src/css/bootstrap.css" /> -->
+	<title>网络脆弱性分析</title>
 	<style>
 		.box {
 			padding: 25px;
@@ -15,29 +14,58 @@
 			border: 1px solid #ddeaff;
 			color: #595959;
 		}
+
+		/* 定义闪烁动画 */
+		@keyframes blink {
+			0% {
+				opacity: 1;
+			}
+
+			50% {
+				opacity: 0;
+			}
+
+			100% {
+				opacity: 1;
+			}
+		}
+
+		/* 应用动画到感叹号 */
+		.blinking-exclamation {
+			color: red;
+			font-size: 20px;
+			animation: blink 1s infinite;
+		}
 	</style>
 	<script>
 		if (typeof module === 'object') {
-		  window.module = module;
-		  module = undefined;
+			window.module = module;
+			module = undefined;
 		}
-	  </script>
+	</script>
 </head>
 
 <body>
 	<div class="box">
 		<!-- Nav tabs -->
-		<ul class="nav nav-tabs" role="tablist">
+		<!-- <ul class="nav nav-tabs" role="tablist">
 			<li role="presentation" class="active"><a href="#netWork" aria-controls="netWork" role="tab"
 					data-toggle="tab">网状图</a></li>
 			<li role="presentation"><a href="#networkLevel" aria-controls="networkLevel" role="tab"
 					data-toggle="tab">层级结构</a></li>
-		</ul>
+		</ul> -->
 		<!-- Tab panes -->
 		<div class="tab-content" style="height: calc(100vh - 110px);">
 			<div role="tabpanel" class="tab-pane active" id="netWork" style="height: 100%;">
 				<div id="mynetwork" style="width: 100%;height: 100%;margin:0 auto;">
-
+					
+				</div>
+				
+				<div class="network-controls">
+					<button class="btn btn-primary" id="addNode">➕ 添加节点</button>
+					<button class="btn btn-success" id="addEdge">🔗 添加连线</button>
+					<button class="btn btn-warning" id="vulnerabilityAnalysis">⚠️ 脆弱性分析</button>
+					<button class="btn btn-danger" id="attackSimulation">🔥 攻击路径模拟</button>
 				</div>
 			</div>
 			<div role="tabpanel" class="tab-pane" id="networkLevel" style="height: 100%;">
@@ -50,9 +78,10 @@
 		<div class="menu-item" id="modifyNode">✏️ 修改节点</div>
 		<div class="menu-item" id="deleteNode">🗑️ 删除节点</div>
 	</div>
+
 	<!-- 备用 CDN -->
 	<link rel="stylesheet" href="../src/css/bootstrap.css">
-	<script src="https://unpkg.com/sweetalert2@11"></script>
+	<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 	<script type="text/javascript" src="../src/js/jQuery-2.1.4.min.js"></script>
 	<script type="text/javascript" src="../src/js/bootstrap.js"></script>
 	<script type="text/javascript" src="../src/js/vis.min.js"></script>

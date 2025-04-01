@@ -52,7 +52,9 @@ export const autoSaveToJSON = (filePath) => {
             mac_address: node.mac_address,
             vendor: node.vendor,
             open_ports: node.open_ports,
-            os: node.os
+            os: node.os,
+            children: node.children,
+            parent: node.parent,
         })),
         edges: appState.edges.get().map(edge => ({
             from_node: appState.nodes.get(edge.from).label,

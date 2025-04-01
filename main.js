@@ -71,7 +71,6 @@ const menuTemplate = [
             properties: ['openFile'],
             filters: [{ name: 'JSON Files', extensions: ['json'] }]
           })
-      
           if (filePaths.length > 0) {
             // 将选择的文件路径发送给渲染进程
             mainWindow.webContents.send('file-path', filePaths[0])
