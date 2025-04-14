@@ -14,7 +14,7 @@ export const getNetworkOptions = () => ({
     },
     edges: {
         smooth: false, //是否显示方向箭头
-        color: "#c8c8c8" // 线条颜色
+        color: "#c8c8c8",
     },
     layout: {
         improvedLayout: false

@@ -31,7 +31,6 @@ window.api.onFilePath(async (filePath) => {
     appState.nodes.clear();
     appState.edges.clear();
     appState.ipToId.clear();
-    console.log("iptoid:"+appState.ipToId);
     // 重置ID计数器
     appState.idCounter = 1;  // TODO: 需要与appState中的ID生成机制保持一致
     // // 调试点1：验证原始数据

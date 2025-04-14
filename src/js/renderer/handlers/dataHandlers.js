@@ -37,7 +37,14 @@ export const addNodeWithChildren = (node, data, parentId) => {
             children: node.children,
             parent: node.parent,
             // 可视化样式配置
-            shape: "circle",
+            shape: "dot",
+            font: {
+                face: 'Arial',
+                size: 14,
+                color: 'rgba(232, 159, 159, 0.9)',
+                strokeWidth: 2,
+                strokeColor: 'rgba(0,0,0,0.7)'
+              },
             color: node.node_type === "subnet" ?
                 {
                     // 子网专用颜色（蓝色系）
@@ -56,10 +63,10 @@ export const addNodeWithChildren = (node, data, parentId) => {
                 },
             shadow: {
                 enabled: true,
-                color: "rgba(0, 0, 0, 0.5)",
-                size: 10,
-                x: 5,
-                y: 5
+                color: 'rgba(0,0,0,0.3)',
+                size: 8,
+                x: 2,
+                y: 2
             },
             opacity: 1
         });
@@ -131,7 +138,7 @@ export const calculateVulnerability = () => {
             };
             let isBlinking = false;
             // 每 500ms 切换一次颜色
-            
+
             node.color = isBlinking ? originalColor : blinkColor;
             appState.nodes.update(node);
 

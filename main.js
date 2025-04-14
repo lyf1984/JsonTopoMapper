@@ -13,8 +13,8 @@ let mainWindow  // 主窗口引用
 function createWindow() {
   // 创建浏览器窗口并配置安全设置
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    fullscreen: true,  // 全屏显示
+    transparent: true, // 透明背景
     webPreferences: {
       nodeIntegration: true,      // 禁用 Node.js 集成
       contextIsolation: true,      // 启用上下文隔离
@@ -22,7 +22,6 @@ function createWindow() {
       preload: join(__dirname, 'preload.js')  // 预加载脚本
     }
   })
-
   // 加载本地 HTML 文件
   const startUrl = join(__dirname, 'dist/index.html')
   mainWindow.loadFile(startUrl)

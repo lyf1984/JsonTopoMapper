@@ -197,76 +197,74 @@ const handleSubnetDoubleClick = (params, filePath) => {
     if (params.nodes.length > 0) {
         const clickedNodeId = params.nodes[0];
         const clickedNode = appState.nodes.get(clickedNodeId);
-        if (clickedNode.node_type === 'subnet') {
-            console.log("双击了subnet节点:", clickedNode.label);
-            // 获取子节点
-            const connectedEdges = appState.network.getConnectedEdges(clickedNodeId);
-            const childNodes = [];
-            const edgesToHide = []; // 改为存储需要隐藏的边
-            const newEdges = [];
-            const newEdgeIds = []; // 新增：用于存储新添加边的id
-            connectedEdges.forEach(edgeId => {
-                const edge = appState.edges.get(edgeId);
-                const targetNodeId = edge.from === clickedNodeId ? edge.to : edge.from;
-                const targetNode = appState.nodes.get(targetNodeId);
-                if (targetNode.parent === clickedNode.label) {
-                    childNodes.push(targetNodeId);
-                    edgesToHide.push(edgeId); // 记录需要隐藏的边
 
-                    // 获取连接到子节点的边
-                    const childConnectedEdges = appState.network.getConnectedEdges(targetNodeId);
-                    childConnectedEdges.forEach(childEdgeId => {
-                        const childEdge = appState.edges.get(childEdgeId);
-                        const otherNodeId = childEdge.from === targetNodeId ? childEdge.to : childEdge.from;
-                        if (otherNodeId !== clickedNodeId) {
-                            // 记录需要隐藏的边
-                            edgesToHide.push(childEdgeId);
-                            // 记录新的连接到subnet节点的边
-                            newEdges.push({
-                                from: otherNodeId,
-                                to: clickedNodeId,
-                                // 可以根据需要复制其他边的属性
-                                length: childEdge.length,
-                                edge_type: childEdge.edge_type,
-                                protocol: childEdge.protocol,
-                                layer: childEdge.layer,
-                                color: childEdge.color
-                            });
-                        }
+        if (appState.network.isCluster(clickedNodeId)) {
+            // 展开前启用物理引擎
+            const options = getNetworkOptions();
+            options.physics = {
+                enabled: true,
+                solver: 'forceAtlas2Based',
+                stabilization: { iterations: 50 }
+            };
+            appState.network.setOptions(options);
+
+            // 展开集群
+            appState.network.openCluster(clickedNodeId, {
+                releaseFunction: (clusterPosition, containedNodesPositions) => {
+                    // 确保containedNodesPositions是数组
+                    const nodesPositions = Array.isArray(containedNodesPositions)
+                        ? containedNodesPositions
+                        : Object.values(containedNodesPositions);
+
+                    // 以子网节点为中心辐射状分布
+                    const radius = 150;
+                    return nodesPositions.map((pos, i) => {
+                        const angle = (i * 2 * Math.PI) / nodesPositions.length;
+                        return {
+                            x: clusterPosition.x + radius * Math.cos(angle),
+                            y: clusterPosition.y + radius * Math.sin(angle)
+                        };
                     });
                 }
             });
 
-            // 收缩或展开子节点
-            const isChildNodesVisible = childNodes.some(nodeId => appState.nodes.get(nodeId).hidden !== true);
-            console.log("当前子节点可见状态:", isChildNodesVisible);
-            childNodes.forEach(nodeId => {
-                appState.nodes.update({ id: nodeId, hidden: isChildNodesVisible });
-            });
-            // 隐藏相关边
-            edgesToHide.forEach(edgeId => {
-                appState.edges.update({ id: edgeId, hidden: isChildNodesVisible });
-            });
-            // 添加新边
-            if (isChildNodesVisible) {
-                const addedEdges = appState.edges.add(newEdges);
-                newEdgeIds.push(...addedEdges); // 记录新添加边的id
-            } else {
-                const edgesToRemove = [];
-                newEdges.forEach((newEdge) => {
-                    const existingEdges = appState.edges.get({
-                        filter: (edge) => edge.from === newEdge.from && edge.to === newEdge.to
-                    });
-                    existingEdges.forEach((edge) => {
-                        edgesToRemove.push(edge.id);
-                    });
-                });
-                appState.edges.remove(edgesToRemove);
-            }
-
-            // 刷新网络以应用更改
-            appState.network.redraw();
-            autoSaveToJSON(filePath);
+            // 自动稳定后关闭物理引擎
+            setTimeout(() => {
+                options.physics.enabled = false;
+                appState.network.setOptions(options);
+            }, 1000);
+        } else if (clickedNode.node_type === 'subnet') {
+            console.log(`双击了子网节点: ${clickedNode.label}`);
+            // 使用vis.js原生集群功能
+            const clusterOptions = {
+                joinCondition: (childOptions) => {
+                    return childOptions.parent === clickedNode.label ||
+                        childOptions.id === clickedNodeId;
+                },
+                clusterNodeProperties: {
+                    label: `子网: ${clickedNode.label}`,
+                    node_type: "subnet",
+                    parent: clickedNode.parent,
+                    shape: 'box',
+                    color: clickedNode.color,
+                    font: { size: 14 },
+                    borderWidth: 2,
+                    borderColor: clickedNode.color.border,
+                    background: "#87CEEB",
+                    border: "#4682B4",
+                    highlight: { background: "#B0E0E6", border: "#5F9EA0" },
+                    hover: { background: "#B0E0E6", border: "#4682B4" },
+                    shadow: {
+                        enabled: true,
+                        color: 'rgba(0,0,0,0.3)',
+                        size: 8,
+                        x: 2,
+                        y: 2
+                    }
+                }
+            };
+            appState.network.clustering.cluster(clusterOptions);
+            // autoSaveToJSON(filePath);
         }
     }
 };
@@ -275,9 +273,138 @@ const handleSubnetDoubleClick = (params, filePath) => {
  * 设置网络图事件监听
  * @param {string} filePath - 自动保存的 JSON 文件路径
  */
+
+const createSubnetNode = (id, label, description, children = []) => ({
+    id: id,
+    label: label,
+    node_type: 'subnet',
+    parent: null,
+    description: description,
+    children: children,  // 添加children属性存储子节点ID
+    font: {
+        face: 'Arial',
+        size: 14,
+        color: 'rgba(232, 159, 159, 0.9)',
+        strokeWidth: 2,
+        strokeColor: 'rgba(0,0,0,0.7)'
+    },
+    color: {
+        background: "#87CEEB",
+        border: "#4682B4",
+        highlight: { background: "#B0E0E6", border: "#5F9EA0" },
+        hover: { background: "#B0E0E6", border: "#4682B4" }
+    },
+    shadow: {
+        enabled: true,
+        color: 'rgba(0,0,0,0.3)',
+        size: 8,
+        x: 2,
+        y: 2
+    },
+    shape: 'dot',
+    margin: 10
+});
+
+// 在handleAddSubnet函数中修改创建子网节点的部分
+const handleAddSubnet = (filePath) => {
+    // 获取所有现有节点
+    const allNodes = appState.nodes.get();
+
+    // 弹出节点选择对话框
+    Swal.fire({
+        title: '创建子网',
+        width: '800px',
+        html: `
+            <div style="margin-bottom: 15px;">
+                <input id="subnet-name" class="swal2-textarea" placeholder="子网名称 (如: 财务部子网)" style="width: 100%;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <input id="subnet-desc" class="swal2-textarea" placeholder="子网描述 (可选)" style="width: 100%; min-height: 80px;">
+            </div>
+            <div style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 4px;">
+                <h4 style="margin-top: 0;">选择节点 (可多选)</h4>
+                <div id="node-selection-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
+                    ${allNodes
+                .map(node => `
+                            <label style="display: flex; align-items: center; padding: 8px; border-radius: 4px; background: #f5f5f5; cursor: pointer;">
+                                <input type="checkbox" value="${node.id}" style="margin-right: 8px;">
+                                <div style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: ${node.color?.background || '#ccc'}; margin-right: 8px;"></div>
+                                ${node.label || node.id}
+                            </label>
+                        `).join('')}
+                </div>
+            </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: '创建子网',
+        cancelButtonText: '取消',
+        preConfirm: () => {
+            const selectedNodes = Array.from(document.querySelectorAll('#node-selection-container input:checked'))
+                .map(checkbox => checkbox.value);
+
+            if (selectedNodes.length === 0) {
+                Swal.showValidationMessage('请至少选择一个节点');
+                return false;
+            }
+            if (!document.getElementById('subnet-name').value.trim()) {
+                Swal.showValidationMessage('请输入子网名称');
+                return false;
+            }
+
+            return {
+                name: document.getElementById('subnet-name').value.trim(),
+                desc: document.getElementById('subnet-desc').value.trim(),
+                nodes: selectedNodes
+            };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // 将节点ID数组转换为IP地址数组
+            const ipArray = result.value.nodes.map(nodeId => {
+                // 遍历ipToId映射表查找对应的IP
+                const node = appState.nodes.get(parseInt(nodeId));
+                console.log("当前节点:", node.label);
+                node.parent = result.value.name;
+                console.log("当前节点parent:", node.parent);
+                appState.nodes.update(node);
+                return node.label;
+            });
+            const subnetId = appState.incrementId();
+            appState.ipToId.set(result.value.name, subnetId);
+            const subnetNode = createSubnetNode(
+                subnetId,
+                result.value.name,
+                result.value.desc,
+                ipArray  // 使用IP地址数组而不是ID数组
+            );
+            // 添加子网节点到数据集
+            appState.nodes.add(subnetNode);
+
+            // 创建子网关系边
+            const edges = result.value.nodes.map(nodeId => ({
+                from: subnetNode.id,
+                to: nodeId,
+                edge_type: 'subnet_member',
+                dashes: true,
+                color: '#808080'
+            }));
+
+            appState.edges.add(edges);
+            appState.network.fit({
+                nodes: [subnetNode.id],
+                animation: true
+            });
+            // autoSaveToJSON(filePath);
+        }
+    });
+};
+
+// 在 setupNetworkEvents 函数中修改调用方式
 export const setupNetworkEvents = (filePath) => {
-    let stabilizedTimer;
-    let hoveredNodeId = null;
+    let stabilizedTimer; // 稳定状态定时器
+    let hoveredNodeId = null; // 鼠标悬停的节点 ID
+
     // 网络稳定事件处理
     appState.network.on("stabilized", () => {
         stabilizedTimer = handleStabilized(stabilizedTimer);
@@ -296,18 +423,27 @@ export const setupNetworkEvents = (filePath) => {
         handleSubnetDoubleClick(params, filePath);
     });
 
+    // 添加子网按钮点击事件
+    document.getElementById('addsubnet').addEventListener('click', () => {
+        handleAddSubnet(filePath);
+    });
+
+    // 节点悬停事件处理
     appState.network.on("hoverNode", (params) => {
         hoveredNodeId = params.node;
     });
 
+    // 节点离开事件处理
     appState.network.on("blurNode", () => {
         hoveredNodeId = null;
     });
+
     appState.network.on("selectNode", function (params) { });
     appState.network.on("click", function (params) { });
     appState.network.on("dragging", function (params) { });
     appState.network.on("dragEnd", function (params) { });
     appState.network.on("zoom", function (params) { });
 
+    // 漏洞分析按钮点击事件
     setupVulnerabilityAnalysisClick();
 };

@@ -37,11 +37,13 @@
     "babel-loader": "^10.0.0",
     "electron": "^35.1.2",
     "electron-reload": "^2.0.0-alpha.1",
-    "webpack": "^5.98.0",
+    "webpack": "^5.99.5",
     "webpack-cli": "^6.0.1",
     "webpack-node-externals": "^3.0.0"
   },
   "dependencies": {
-    "vis": "^4.21.0-EOL"
+    "graceful-fs": "latest",
+    "vis": "^4.21.0-EOL",
+    "webpack": "^5.99.5"
   }
 }
