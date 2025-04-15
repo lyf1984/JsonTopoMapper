@@ -5,37 +5,6 @@
 	<meta charset="utf-8">
 	<title>网络脆弱性分析</title>
 	<style>
-		.box {
-			padding: 25px;
-		}
-
-		.vis-network div.vis-tooltip {
-			background-color: #fff;
-			border: 1px solid #ddeaff;
-			color: #595959;
-		}
-
-		/* 定义闪烁动画 */
-		@keyframes blink {
-			0% {
-				opacity: 1;
-			}
-
-			50% {
-				opacity: 0;
-			}
-
-			100% {
-				opacity: 1;
-			}
-		}
-
-		/* 应用动画到感叹号 */
-		.blinking-exclamation {
-			color: red;
-			font-size: 20px;
-			animation: blink 1s infinite;
-		}
 	</style>
 	<script>
 		if (typeof module === 'object') {
@@ -47,14 +16,7 @@
 
 <body>
 	<div class="box">
-		<!-- Nav tabs -->
-		<!-- <ul class="nav nav-tabs" role="tablist">
-			<li role="presentation" class="active"><a href="#netWork" aria-controls="netWork" role="tab"
-					data-toggle="tab">网状图</a></li>
-			<li role="presentation"><a href="#networkLevel" aria-controls="networkLevel" role="tab"
-					data-toggle="tab">层级结构</a></li>
-		</ul> -->
-		<!-- Tab panes -->
+
 		<div class="tab-content" style="height: calc(100vh - 110px);">
 			<div role="tabpanel" class="tab-pane active" id="netWork" style="height: 100%;">
 				<div id="mynetwork" style="width: 100%;height: 100%;margin:0 auto;">
@@ -87,6 +49,8 @@
 	<script type="text/javascript" src="../src/js/bootstrap.js"></script>
 	<script type="text/javascript" src="../src/js/vis.min.js"></script>
 	<script src="renderer.bundle.js"></script>
+	<!-- 在head标签内添加 -->
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
 </body>
 
 </html>

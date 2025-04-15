@@ -8301,31 +8301,8 @@ button.close {
 }
 
 /*# sourceMappingURL=bootstrap.css.map */
-.custom-context-menu {
-  position: absolute;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
-  display: none;
-  z-index: 9999;
-}
 
-.menu-item {
-  padding: 8px 15px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #333;
-  transition: all 0.2s;
-}
 
-.menu-item:hover {
-  background: #f0f0f0;
-}
-
-.menu-item:not(:last-child) {
-  border-bottom: 1px solid #eee;
-}
 
 .custom-menu {
   min-width: 120px;
@@ -8345,26 +8322,23 @@ button.close {
   font-size: 16px;
 }
 
-.network-controls {
-  padding: 10px 0;
-  margin-bottom: 10px;
-  border-bottom: 1px solid #ddd;
-}
-
-.network-controls button {
-  margin-right: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
 
 #mynetwork {
   border: 1px solid #e7e7e7;
-  border-radius: 4px;
+  border-radius: 8px;
   background: #f8f9fa;
   background-image:
     linear-gradient(#999 1px, transparent 1px),
     linear-gradient(90deg, #999 1px, transparent 1px);
-  background-size: 50px 50px;
-  /* 网格大小 */
+  background-size: 35px 35px; /* 更密集的网格 */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+/* 添加悬停效果 */
+#mynetwork:hover {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border-color: #d0d0d0;
 }
 
 /* 添加动画效果 */
@@ -8414,4 +8388,145 @@ button.close {
   background-color: #5bc0de;
   border-color: #46b8da;
   color: #fff;
+}
+.box {
+  padding: 25px;
+}
+/* ... 原有代码保持不变 ... */
+
+/* 增强自定义右键菜单样式 */
+.custom-context-menu {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  display: none;
+  z-index: 9999;
+  min-width: 180px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.menu-item {
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.menu-item:hover {
+  background: #f5f7fa;
+  color: #1890ff;
+}
+
+.menu-item:not(:last-child) {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* 改进网络图控件样式 */
+.network-controls {
+  padding: 15px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.network-controls button {
+  margin-right: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s;
+}
+
+.network-controls button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* 优化动画效果 */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(255, 193, 7, 0.4);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.6);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(255, 193, 7, 0);
+  }
+}
+
+/* 添加新的淡入淡出动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.custom-context-menu {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* 工具提示样式优化 */
+.vis-network div.vis-tooltip {
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  color: #595959;
+  border-radius: 6px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  padding: 8px 12px;
+  font-size: 13px;
+  max-width: 300px;
+}
+
+/* SweetAlert2 自定义样式 */
+.custom-swal-popup {
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e0e0e0;
+}
+
+.custom-swal-title {
+  color: #333;
+  font-size: 22px;
+  font-weight: 600;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 15px;
+}
+
+.custom-swal-content {
+  font-size: 15px;
+  color: #555;
+  line-height: 1.6;
+}
+
+.custom-swal-content h4 {
+  color: #444;
+  margin-bottom: 15px;
+}
+
+.custom-swal-content p {
+  margin-bottom: 10px;
+}
+
+.custom-swal-confirm-btn {
+  background-color: #5bc0de !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 8px 20px !important;
+  font-size: 14px !important;
+  transition: all 0.3s !important;
+}
+
+.custom-swal-confirm-btn:hover {
+  background-color: #46b8da !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
 }

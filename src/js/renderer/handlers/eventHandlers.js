@@ -57,10 +57,23 @@ const handleContextMenu = (params, hoveredNodeId, filePath) => {
                 }</p>
             `;
             Swal.fire({
-                title: '节点信息',
+                title: '节点详情',
                 html: detailContent,
                 confirmButtonText: '关闭',
-                width: '600px'
+                width: '650px',
+                background: '#f8f9fa',
+                customClass: {
+                    popup: 'custom-swal-popup',
+                    title: 'custom-swal-title',
+                    content: 'custom-swal-content',
+                    confirmButton: 'custom-swal-confirm-btn'
+                },
+                showClass: {
+                    popup: 'animate__animated animate__fadeInDown animate__faster'
+                },
+                hideClass: {
+                    popup: 'animate__animated animate__fadeOutUp animate__faster'
+                }
             });
             menu.style.display = 'none';
         };
@@ -71,6 +84,18 @@ const handleContextMenu = (params, hoveredNodeId, filePath) => {
          */
         const handleModifyNode = () => {
             Swal.fire({
+                customClass: {
+                    popup: 'custom-swal-popup',
+                    title: 'custom-swal-title',
+                    content: 'custom-swal-content',
+                    confirmButton: 'custom-swal-confirm-btn'
+                },
+                showClass: {
+                    popup: 'animate__animated animate__fadeInDown'
+                },
+                hideClass: {
+                    popup: 'animate__animated animate__fadeOutUp'
+                },
                 title: '修改节点信息',
                 html: `
                     <input id="swal-ip" class="swal2-input" placeholder="IP地址" value="${node.label}">
@@ -197,7 +222,6 @@ const handleSubnetDoubleClick = (params, filePath) => {
     if (params.nodes.length > 0) {
         const clickedNodeId = params.nodes[0];
         const clickedNode = appState.nodes.get(clickedNodeId);
-
         if (appState.network.isCluster(clickedNodeId)) {
             // 展开前启用物理引擎
             const options = getNetworkOptions();
@@ -234,10 +258,34 @@ const handleSubnetDoubleClick = (params, filePath) => {
                 appState.network.setOptions(options);
             }, 1000);
         } else if (clickedNode.node_type === 'subnet') {
-            console.log(`双击了子网节点: ${clickedNode.label}`);
+            console.log(`双击子网节点: ${clickedNode.label}`);
+            // const connectedNodes = appState.network.getConnectedNodes(clickedNodeId);
+            // for (const nodeId of connectedNodes) {
+            //     const node = appState.nodes.get(parseInt(nodeId));
+            //     if (appState.network.isCluster(parseInt(nodeId))){
+            //         console.log(node.label);
+            //     }
+            //     if(node.node_type === 'subnet' && !appState.network.isCluster(parseInt(nodeId)) && node.parent === clickedNode.label){
+            //         console.log(node.label);
+            //         handleSubnetDoubleClick({ nodes: [parseInt(nodeId)] }, filePath);//递归调用
+            //     }
+            // }
+            // var visibleNodes = [];
+            // for (var nodeId in appState.network.body.nodes) {
+            //     // we check if the node is inside a cluster
+            //     if (!appState.network.clustering.clusteredNodes[nodeId]) {
+            //         var node = appState.network.body.nodes[parseInt(nodeId)];
+            //         console.log(node.options);
+            //         if(node.options.parent === clickedNode.label && !appState.network.isCluster(parseInt(nodeId)))
+            //             handleSubnetDoubleClick({ nodes: [parseInt(nodeId)] }, filePath);//递归调用;
+            //     }
+            // }
             // 使用vis.js原生集群功能
             const clusterOptions = {
                 joinCondition: (childOptions) => {
+                    if(childOptions.parent === clickedNode.label && !appState.network.isCluster(childOptions.id)){
+                        handleSubnetDoubleClick({ nodes: [childOptions.id] }, filePath);//递归调用;
+                    }
                     return childOptions.parent === clickedNode.label ||
                         childOptions.id === clickedNodeId;
                 },
@@ -261,8 +309,17 @@ const handleSubnetDoubleClick = (params, filePath) => {
                         x: 2,
                         y: 2
                     }
-                }
+                },
+                // processProperties: (clusterOptions, childNodes) => {
+                //     for (var i = 0; i < childNodes.length; i++) {
+                //         if (childNodes[i].node_type === 'subnet' && childNodes[i].label !== clickedNode.label && !appState.network.isCluster(childNodes[i].id)) {
+                //             console.log(childNodes[i].label);
+                //             // handleSubnetDoubleClick({ nodes: [childNodes[i].id] }, filePath);//递归调用
+                //         }
+                //     }
+                // }
             };
+            appState.network.clustering.cluster(clusterOptions);
             appState.network.clustering.cluster(clusterOptions);
             // autoSaveToJSON(filePath);
         }
@@ -312,6 +369,18 @@ const handleAddSubnet = (filePath) => {
 
     // 弹出节点选择对话框
     Swal.fire({
+        customClass: {
+            popup: 'custom-swal-popup',
+            title: 'custom-swal-title',
+            content: 'custom-swal-content',
+            confirmButton: 'custom-swal-confirm-btn'
+        },
+        showClass: {
+            popup: 'animate__animated animate__fadeInDown animate__faster'
+        },
+        hideClass: {
+            popup: 'animate__animated animate__fadeOutUp animate__faster'
+        },
         title: '创建子网',
         width: '800px',
         html: `
@@ -380,6 +449,21 @@ const handleAddSubnet = (filePath) => {
             );
             // 添加子网节点到数据集
             appState.nodes.add(subnetNode);
+
+            // 启用物理引擎以自动布局
+            const options = getNetworkOptions();
+            options.physics = {
+                enabled: true,
+                solver: 'forceAtlas2Based',
+                stabilization: { iterations: 50 }
+            };
+            appState.network.setOptions(options);
+
+            // 自动稳定后关闭物理引擎
+            setTimeout(() => {
+                options.physics.enabled = false;
+                appState.network.setOptions(options);
+            }, 1000);
 
             // 创建子网关系边
             const edges = result.value.nodes.map(nodeId => ({
